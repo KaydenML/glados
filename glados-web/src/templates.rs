@@ -10,7 +10,9 @@ use crate::routes::Stats;
 
 #[derive(Template)]
 #[template(path = "index.html")]
-pub struct IndexTemplate {}
+pub struct IndexTemplate {
+    pub client_count: Vec<u16>,
+}
 
 #[derive(Template)]
 #[template(path = "network_dashboard.html")]

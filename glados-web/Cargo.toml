@@ -14,7 +14,7 @@ askama = "0.11.1"
 axum = "0.6.11"
 chrono = "0.4.23"
 clap = { version = "4.0.26", features = ["derive"] }
-enr = "0.8.1"
+enr = { version = "0.8.1", features = ["k256", "ed25519"] }
 entity = { path = "../entity" }
 env_logger = "0.9.3"
 ethereum-types = "0.14.0"

@@ -4,6 +4,7 @@ use axum::{
     response::IntoResponse,
 };
 use chrono::{DateTime, Duration, Utc};
+use enr::Enr;
 use entity::client_info;
 use entity::{
     content,
@@ -12,10 +13,12 @@ use entity::{
 };
 use ethportal_api::types::content_key::{HistoryContentKey, OverlayContentKey};
 use ethportal_api::utils::bytes::{hex_decode, hex_encode};
+use migration::Function::Sum;
 use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, LoaderTrait, ModelTrait, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect,
 };
+use std::str::FromStr;
 use std::sync::Arc;
 use std::{fmt::Display, io};
 use tracing::error;
@@ -35,8 +38,31 @@ pub async fn handle_error(_err: io::Error) -> impl IntoResponse {
     (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong...")
 }
 
-pub async fn root(Extension(_state): Extension<Arc<State>>) -> impl IntoResponse {
-    let template = IndexTemplate {};
+pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse {
+    // index 0 is trin
+    // index 1 is fluffy
+    // index 2 is ultralight
+    // index 3 is unknown
+    let mut client_count: Vec<u16> = vec![0, 0, 0, 0];
+    let enr_list = record::Entity::find()
+        .all(&state.database_connection)
+        .await
+        .unwrap();
+    for model in enr_list {
+        let enr: Enr<enr::CombinedKey> =
+            Enr::from_str(&model.raw).expect("parsing enr should work");
+        if let Some(value) = enr.get("c") {
+            match value[0] {
+                0x74 => client_count[0] += 1,
+                0x75 => client_count[1] += 1,
+                0x66 => client_count[2] += 1,
+                _ => client_count[3] += 1,
+            }
+        } else {
+            client_count[3] += 1
+        }
+    }
+    let template = IndexTemplate { client_count };
     HtmlTemplate(template)
 }
 
@@ -281,12 +307,12 @@ pub async fn get_audits_for_recent_content(
             .unzip();
 
     let client_info = audits
-            .load_one(client_info::Entity, conn)
-            .await
-            .map_err(|e| {
-                error!(key.count=audits.len(), err=?e, "Could not look up client info for recent audits");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
+        .load_one(client_info::Entity, conn)
+        .await
+        .map_err(|e| {
+            error!(key.count=audits.len(), err=?e, "Could not look up client info for recent audits");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     let audit_tuples: Vec<AuditTuple> = itertools::izip!(audits, recent_content, client_info)
         .filter_map(|(audit, con, info)| {
