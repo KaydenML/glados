@@ -12,10 +12,14 @@ use entity::{
 };
 use ethportal_api::types::content_key::{HistoryContentKey, OverlayContentKey};
 use ethportal_api::utils::bytes::{hex_decode, hex_encode};
+use migration::{Alias, Func, JoinType};
+use sea_orm::sea_query::{Expr, Query, SeaRc};
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, LoaderTrait, ModelTrait, PaginatorTrait,
-    QueryFilter, QueryOrder, QuerySelect,
+    ColumnTrait, ConnectionTrait, DatabaseConnection, DynIden, EntityTrait, FromQueryResult,
+    LoaderTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
+
+use std::fmt::Formatter;
 use std::sync::Arc;
 use std::{fmt::Display, io};
 use tracing::error;
@@ -35,8 +39,80 @@ pub async fn handle_error(_err: io::Error) -> impl IntoResponse {
     (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong...")
 }
 
-pub async fn root(Extension(_state): Extension<Arc<State>>) -> impl IntoResponse {
-    let template = IndexTemplate {};
+#[derive(FromQueryResult)]
+pub struct PieChartResult {
+    pub client_name: String,
+    pub client_count: u32,
+}
+
+impl Display for PieChartResult {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Client Name {} Client Count {}",
+            self.client_name, self.client_count
+        )
+    }
+}
+
+pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse {
+    let left_table: DynIden = SeaRc::new(Alias::new("left_table"));
+    let right_table: DynIden = SeaRc::new(Alias::new("right_table"));
+    let mut client_count = Query::select();
+    client_count
+        .expr_as(
+            Func::count(Expr::col(record::Column::Id)),
+            Alias::new("client_count"),
+        )
+        .expr_as(
+            Expr::cust_with_expr(
+                "ifnull(substr(?, 2, 1), 'unknown')",
+                Expr::col((right_table.clone(), Alias::new("value"))),
+            )
+            .cast_as(Alias::new("TEXT")),
+            Alias::new("client_name"),
+        )
+        .from_subquery(
+            Query::select()
+                .from(record::Entity)
+                .group_by_columns([record::Column::NodeId])
+                .expr_as(
+                    Func::max(Expr::col(record::Column::Id)),
+                    Alias::new("record_id"),
+                )
+                .take(),
+            left_table.clone(),
+        )
+        .join_subquery(
+            JoinType::LeftJoin,
+            Query::select()
+                .from(key_value::Entity)
+                .column(key_value::Column::RecordId)
+                .column(key_value::Column::Value)
+                .and_where(
+                    Expr::col(key_value::Column::Key)
+                        .cast_as(Alias::new("TEXT"))
+                        .eq("c"),
+                )
+                .take(),
+            right_table.clone(),
+            Expr::col((left_table.clone(), Alias::new("record_id")))
+                .equals((right_table.clone(), Alias::new("record_id"))),
+        )
+        .add_group_by([Expr::cust_with_expr(
+            "substr(?, 2, 1)",
+            Expr::col((right_table.clone(), Alias::new("value"))),
+        )]);
+
+    let builder = state.database_connection.get_database_backend();
+    let pie_chart_data = PieChartResult::find_by_statement(builder.build(&client_count))
+        .all(&state.database_connection)
+        .await
+        .unwrap();
+
+    let template = IndexTemplate {
+        pie_chart_client_count: pie_chart_data,
+    };
     HtmlTemplate(template)
 }
 
@@ -279,12 +355,12 @@ pub async fn get_audits_for_recent_content(
             .unzip();
 
     let client_info = audits
-            .load_one(client_info::Entity, conn)
-            .await
-            .map_err(|e| {
-                error!(key.count=audits.len(), err=?e, "Could not look up client info for recent audits");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
+        .load_one(client_info::Entity, conn)
+        .await
+        .map_err(|e| {
+            error!(key.count=audits.len(), err=?e, "Could not look up client info for recent audits");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     let audit_tuples: Vec<AuditTuple> = itertools::izip!(audits, recent_content, client_info)
         .filter_map(|(audit, con, info)| {
