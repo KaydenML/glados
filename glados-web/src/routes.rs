@@ -13,7 +13,6 @@ use entity::{
 };
 use ethportal_api::types::content_key::{HistoryContentKey, OverlayContentKey};
 use ethportal_api::utils::bytes::{hex_decode, hex_encode};
-use migration::Function::Sum;
 use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, LoaderTrait, ModelTrait, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect,
@@ -127,7 +126,6 @@ pub async fn node_detail(
     Path(node_id_hex): Path<String>,
     Extension(state): Extension<Arc<State>>,
 ) -> Result<HtmlTemplate<NodeDetailTemplate>, StatusCode> {
-    const KEY_COUNT: u64 = 50;
     let node_id = hex_decode(&node_id_hex).map_err(|e| {
         error!(node_id=node_id_hex, err=?e, "Could not decode proved node_id");
         StatusCode::INTERNAL_SERVER_ERROR
@@ -185,7 +183,6 @@ pub async fn enr_detail(
     Path((node_id_hex, enr_seq)): Path<(String, u64)>,
     Extension(state): Extension<Arc<State>>,
 ) -> Result<HtmlTemplate<EnrDetailTemplate>, StatusCode> {
-    const KEY_COUNT: u64 = 50;
     let node_id = hex_decode(&node_id_hex).map_err(|e| {
         error!(node_id=node_id_hex, err=?e, "Could not decode proved node_id");
         StatusCode::INTERNAL_SERVER_ERROR
