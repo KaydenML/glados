@@ -18,7 +18,7 @@ use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, DynIden, EntityTrait, FromQueryResult,
     LoaderTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
-
+use serde::Serialize;
 use std::fmt::Formatter;
 use std::sync::Arc;
 use std::{fmt::Display, io};
@@ -39,7 +39,7 @@ pub async fn handle_error(_err: io::Error) -> impl IntoResponse {
     (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong...")
 }
 
-#[derive(FromQueryResult)]
+#[derive(FromQueryResult, Serialize)]
 pub struct PieChartResult {
     pub client_name: String,
     pub client_count: u32,
@@ -76,10 +76,8 @@ pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse 
             Query::select()
                 .from(record::Entity)
                 .group_by_columns([record::Column::NodeId])
-                .expr_as(
-                    Func::max(Expr::col(record::Column::Id)),
-                    Alias::new("record_id"),
-                )
+                .and_having(Func::max(Expr::col(record::Column::SequenceNumber)).into())
+                .expr_as(Expr::col(record::Column::Id), Alias::new("record_id"))
                 .take(),
             left_table.clone(),
         )
