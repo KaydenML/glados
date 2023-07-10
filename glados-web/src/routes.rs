@@ -89,7 +89,7 @@ pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse 
                 .column(key_value::Column::Value)
                 .and_where(
                     Expr::col(key_value::Column::Key)
-                        .cast_as(Alias::new("TEXT"))
+                        .cast_as(Alias::new("TEXT")) // Uses a CAST to TEXT on the table in order to do a comparison to the binary value
                         .eq("c"),
                 )
                 .take(),
