@@ -89,7 +89,7 @@ pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse 
                 .column(key_value::Column::Value)
                 .and_where(
                     Expr::col(key_value::Column::Key)
-                        .cast_as(Alias::new("TEXT")) // Uses a CAST to TEXT on the table in order to do a comparison to the binary value
+                        .cast_as(Alias::new("TEXT"))
                         .eq("c"),
                 )
                 .take(),
@@ -101,8 +101,6 @@ pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse 
             "substr(?, 2, 1)",
             Expr::col((right_table.clone(), Alias::new("value"))),
         )]);
-
-    // panic!("{}", client_count.to_string(SqliteQueryBuilder));
 
     let builder = state.database_connection.get_database_backend();
     let pie_chart_data = PieChartResult::find_by_statement(builder.build(&client_count))
