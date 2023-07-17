@@ -22,8 +22,10 @@ use serde::Serialize;
 use std::fmt::Formatter;
 use std::sync::Arc;
 use std::{fmt::Display, io};
+use itertools::max;
 use tracing::error;
 use tracing::info;
+use migration::ColumnRef::Asterisk;
 
 use crate::templates::{
     ContentAuditDetailTemplate, ContentDashboardTemplate, ContentIdDetailTemplate,
@@ -61,22 +63,33 @@ pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse 
     let mut client_count = Query::select();
     client_count
         .expr_as(
-            Func::count(Expr::col(record::Column::Id)),
+            Func::count(Expr::col(Asterisk)),
             Alias::new("client_count"),
         )
         .expr_as(
-            Expr::cust_with_expr(
-                "COALESCE(substr(?, 2, 1), 'unknown')",
-                Expr::col((right_table.clone(), Alias::new("value"))),
+            Expr::cust(
+                "COALESCE(substr(value, 2, 1), 'unknown')",
             ),
             Alias::new("client_name"),
         )
         .from_subquery(
             Query::select()
-                .from(record::Entity)
-                .group_by_columns([record::Column::NodeId])
-                .and_having(Func::max(Expr::col(record::Column::SequenceNumber)).into())
                 .expr_as(Expr::col(record::Column::Id), Alias::new("record_id"))
+                .from(record::Entity)
+                .from_subquery(
+                    Query::select()
+                        .from(record::Entity)
+                        .expr(Expr::col(record::Column::NodeId))
+                        .expr_as(Expr::max(Expr::col(record::Column::SequenceNumber)), Alias::new("sequence_number"))
+                        .group_by_columns([record::Column::NodeId])
+                        .take(), Alias::new("max_sequence_number"))
+
+                .and_where(
+                    Expr::col((Alias::new("record"), Alias::new("node_id")))
+                        .eq(Expr::col((Alias::new("max_sequence_number"), Alias::new("node_id"))))
+                        .and(Expr::col((Alias::new("record"), Alias::new("sequence_number")))
+                        .eq(Expr::col((Alias::new("max_sequence_number"), Alias::new("sequence_number")))))
+                )
                 .take(),
             left_table.clone(),
         )
@@ -96,9 +109,9 @@ pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse 
             Expr::col((left_table.clone(), Alias::new("record_id")))
                 .equals((right_table.clone(), Alias::new("record_id"))),
         )
-        .add_group_by([Expr::cust_with_expr(
-            "substr(?, 2, 1)",
-            Expr::col((right_table.clone(), Alias::new("value"))),
+        .add_group_by([Expr::cust(
+            "substr(value, 2, 1)",
+
         )]);
 
     panic!("{}", client_count.to_string( PostgresQueryBuilder));
