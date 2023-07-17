@@ -13,7 +13,7 @@ use entity::{
 use ethportal_api::types::content_key::{HistoryContentKey, OverlayContentKey};
 use ethportal_api::utils::bytes::{hex_decode, hex_encode};
 use migration::{Alias, Func, JoinType};
-use sea_orm::sea_query::{Expr, Query, SeaRc};
+use sea_orm::sea_query::{Expr, PostgresQueryBuilder, Query, SeaRc, SqliteQueryBuilder};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, DynIden, EntityTrait, FromQueryResult,
     LoaderTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
@@ -66,10 +66,9 @@ pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse 
         )
         .expr_as(
             Expr::cust_with_expr(
-                "ifnull(substr(?, 2, 1), 'unknown')",
+                "COALESCE(substr(?, 2, 1), 'unknown')",
                 Expr::col((right_table.clone(), Alias::new("value"))),
-            )
-            .cast_as(Alias::new("TEXT")),
+            ),
             Alias::new("client_name"),
         )
         .from_subquery(
@@ -101,6 +100,8 @@ pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse 
             "substr(?, 2, 1)",
             Expr::col((right_table.clone(), Alias::new("value"))),
         )]);
+
+    panic!("{}", client_count.to_string( PostgresQueryBuilder));
 
     let builder = state.database_connection.get_database_backend();
     let pie_chart_data = PieChartResult::find_by_statement(builder.build(&client_count))

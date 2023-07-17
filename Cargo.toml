@@ -6,11 +6,12 @@ rust-version = "1.70.0"
 authors = ["Piper Merriam <piper@pipermerriam.com>"]
 
 [workspace]
-members = [".", "glados-cartographer", "glados-core", "glados-web", "glados-monitor", "entity", "migration"]
+members = [".", "glados-cartographer", "glados-core", "glados-web", "glados-monitor", "entity", "migration", "create-database"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+create-database = { path = "create-database"}
 entity = { path = "entity" }
 glados-core = { path = "glados-core" }
 glados-monitor = { path = "glados-monitor" }

@@ -913,6 +913,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "create-database"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 4.3.4",
+ "enr 0.8.1",
+ "entity",
+ "env_logger 0.10.0",
+ "ethereum-types 0.14.1",
+ "ethportal-api",
+ "glados-core",
+ "migration",
+ "sea-orm",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "crossbeam-queue"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2019,6 +2038,7 @@ dependencies = [
 name = "glados"
 version = "0.1.0"
 dependencies = [
+ "create-database",
  "entity",
  "glados-audit",
  "glados-core",
