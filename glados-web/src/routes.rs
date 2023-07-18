@@ -12,8 +12,9 @@ use entity::{
 };
 use ethportal_api::types::content_key::{HistoryContentKey, OverlayContentKey};
 use ethportal_api::utils::bytes::{hex_decode, hex_encode};
+use migration::ColumnRef::Asterisk;
 use migration::{Alias, Func, JoinType};
-use sea_orm::sea_query::{Expr, PostgresQueryBuilder, Query, SeaRc, SqliteQueryBuilder};
+use sea_orm::sea_query::{Expr, Query, SeaRc};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, DynIden, EntityTrait, FromQueryResult,
     LoaderTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
@@ -22,10 +23,8 @@ use serde::Serialize;
 use std::fmt::Formatter;
 use std::sync::Arc;
 use std::{fmt::Display, io};
-use itertools::max;
 use tracing::error;
 use tracing::info;
-use migration::ColumnRef::Asterisk;
 
 use crate::templates::{
     ContentAuditDetailTemplate, ContentDashboardTemplate, ContentIdDetailTemplate,
@@ -62,14 +61,9 @@ pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse 
     let right_table: DynIden = SeaRc::new(Alias::new("right_table"));
     let mut client_count = Query::select();
     client_count
+        .expr_as(Func::count(Expr::col(Asterisk)), Alias::new("client_count"))
         .expr_as(
-            Func::count(Expr::col(Asterisk)),
-            Alias::new("client_count"),
-        )
-        .expr_as(
-            Expr::cust(
-                "COALESCE(substr(value, 2, 1), 'unknown')",
-            ),
+            Expr::cust("COALESCE(substr(value, 2, 1), 'unknown')"),
             Alias::new("client_name"),
         )
         .from_subquery(
@@ -80,15 +74,28 @@ pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse 
                     Query::select()
                         .from(record::Entity)
                         .expr(Expr::col(record::Column::NodeId))
-                        .expr_as(Expr::max(Expr::col(record::Column::SequenceNumber)), Alias::new("sequence_number"))
+                        .expr_as(
+                            Expr::max(Expr::col(record::Column::SequenceNumber)),
+                            Alias::new("sequence_number"),
+                        )
                         .group_by_columns([record::Column::NodeId])
-                        .take(), Alias::new("max_sequence_number"))
-
+                        .take(),
+                    Alias::new("max_sequence_number"),
+                )
                 .and_where(
                     Expr::col((Alias::new("record"), Alias::new("node_id")))
-                        .eq(Expr::col((Alias::new("max_sequence_number"), Alias::new("node_id"))))
-                        .and(Expr::col((Alias::new("record"), Alias::new("sequence_number")))
-                        .eq(Expr::col((Alias::new("max_sequence_number"), Alias::new("sequence_number")))))
+                        .eq(Expr::col((
+                            Alias::new("max_sequence_number"),
+                            Alias::new("node_id"),
+                        )))
+                        .and(
+                            Expr::col((Alias::new("record"), Alias::new("sequence_number"))).eq(
+                                Expr::col((
+                                    Alias::new("max_sequence_number"),
+                                    Alias::new("sequence_number"),
+                                )),
+                            ),
+                        ),
                 )
                 .take(),
             left_table.clone(),
@@ -109,12 +116,9 @@ pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse 
             Expr::col((left_table.clone(), Alias::new("record_id")))
                 .equals((right_table.clone(), Alias::new("record_id"))),
         )
-        .add_group_by([Expr::cust(
-            "substr(value, 2, 1)",
+        .add_group_by([Expr::cust("substr(value, 2, 1)")]);
 
-        )]);
-
-    panic!("{}", client_count.to_string( PostgresQueryBuilder));
+    // panic!("{}", client_count.to_string( PostgresQueryBuilder));
 
     let builder = state.database_connection.get_database_backend();
     let pie_chart_data = PieChartResult::find_by_statement(builder.build(&client_count))
