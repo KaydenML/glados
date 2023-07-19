@@ -90,11 +90,11 @@ function pie_chart_count(pie_chart_client_count) {
     const char_array = [];
 
     pie_chart_client_count.forEach(i => {
-        if (i.client_name === "t") {
+        if (i.client_name === "t" || i.client_name === "\\x74") {
             char_array.push({ name: "Trin", value: i.client_count });
-        } else if (i.client_name === "f") {
+        } else if (i.client_name === "f" || i.client_name === "\\x46") {
             char_array.push({ name: "Fluffy", value: i.client_count });
-        } else if (i.client_name === "u") {
+        } else if (i.client_name === "u" || i.client_name === "\\x55") {
             char_array.push({ name: "Ultralight", value: i.client_count });
         } else {
             char_array.push({ name: "Unknown", value: i.client_count });

@@ -12,12 +12,11 @@ use entity::{
 };
 use ethportal_api::types::content_key::{HistoryContentKey, OverlayContentKey};
 use ethportal_api::utils::bytes::{hex_decode, hex_encode};
-use migration::ColumnRef::Asterisk;
-use migration::{Alias, Func, JoinType};
-use sea_orm::sea_query::{Expr, PostgresQueryBuilder, Query, SeaRc};
+use migration::{Alias, JoinType};
+use sea_orm::sea_query::{Expr, Query, SeaRc};
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseConnection, DynIden, EntityTrait, FromQueryResult,
-    LoaderTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+    ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, DynIden, EntityTrait,
+    FromQueryResult, LoaderTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 use serde::Serialize;
 use std::fmt::Formatter;
@@ -59,9 +58,13 @@ impl Display for PieChartResult {
 pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse {
     let left_table: DynIden = SeaRc::new(Alias::new("left_table"));
     let right_table: DynIden = SeaRc::new(Alias::new("right_table"));
+    let builder = state.database_connection.get_database_backend();
     let mut client_count = Query::select();
     client_count
-        .expr_as(Expr::cust("CAST(COUNT(*) AS INT)"), Alias::new("client_count"))
+        .expr_as(
+            Expr::cust("CAST(COUNT(*) AS INT)"),
+            Alias::new("client_count"),
+        )
         .expr_as(
             Expr::cust("CAST(COALESCE(substr(value, 2, 1), 'unknown') AS TEXT)"),
             Alias::new("client_name"),
@@ -107,9 +110,13 @@ pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse 
                 .column(key_value::Column::RecordId)
                 .column(key_value::Column::Value)
                 .and_where(
-                    Expr::col(key_value::Column::Key)
-                        .cast_as(Alias::new("TEXT")) // Uses a CAST to TEXT on the table in order to do a comparison to the binary value
-                        .eq("c"),
+                    Expr::cust(if builder == DbBackend::Sqlite {
+                        "CAST(key AS TEXT)"
+                    } else {
+                        "convert_from(key, 'UTF8')"
+                    })
+                    // Uses a CAST to TEXT on the table in order to do a comparison to the binary value, both SQLite and Postgres both need to be casted in order to be compared
+                    .eq("c"),
                 )
                 .take(),
             right_table.clone(),
@@ -118,9 +125,6 @@ pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse 
         )
         .add_group_by([Expr::cust("substr(value, 2, 1)")]);
 
-    // panic!("{}", client_count.to_string( PostgresQueryBuilder));
-
-    let builder = state.database_connection.get_database_backend();
     let pie_chart_data = PieChartResult::find_by_statement(builder.build(&client_count))
         .all(&state.database_connection)
         .await
