@@ -14,7 +14,7 @@ use ethportal_api::types::content_key::{HistoryContentKey, OverlayContentKey};
 use ethportal_api::utils::bytes::{hex_decode, hex_encode};
 use migration::ColumnRef::Asterisk;
 use migration::{Alias, Func, JoinType};
-use sea_orm::sea_query::{Expr, Query, SeaRc};
+use sea_orm::sea_query::{Expr, PostgresQueryBuilder, Query, SeaRc};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, DynIden, EntityTrait, FromQueryResult,
     LoaderTrait, ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
@@ -43,7 +43,7 @@ pub async fn handle_error(_err: io::Error) -> impl IntoResponse {
 #[derive(FromQueryResult, Serialize)]
 pub struct PieChartResult {
     pub client_name: String,
-    pub client_count: u32,
+    pub client_count: i32,
 }
 
 impl Display for PieChartResult {
@@ -61,9 +61,9 @@ pub async fn root(Extension(state): Extension<Arc<State>>) -> impl IntoResponse 
     let right_table: DynIden = SeaRc::new(Alias::new("right_table"));
     let mut client_count = Query::select();
     client_count
-        .expr_as(Func::count(Expr::col(Asterisk)), Alias::new("client_count"))
+        .expr_as(Expr::cust("CAST(COUNT(*) AS INT)"), Alias::new("client_count"))
         .expr_as(
-            Expr::cust("COALESCE(substr(value, 2, 1), 'unknown')"),
+            Expr::cust("CAST(COALESCE(substr(value, 2, 1), 'unknown') AS TEXT)"),
             Alias::new("client_name"),
         )
         .from_subquery(
